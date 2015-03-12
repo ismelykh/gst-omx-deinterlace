@@ -956,8 +956,8 @@ gst_omx_video_dec_deallocate_output_buffers (GstOMXVideoDec * self)
   }
 #if defined (USE_OMX_TARGET_RPI) && defined (HAVE_GST_GL)
   err =
-      gst_omx_port_deallocate_buffers (self->eglimage ? self->
-      egl_out_port : self->dec_out_port);
+      gst_omx_port_deallocate_buffers (self->
+      eglimage ? self->egl_out_port : self->dec_out_port);
 #else
   err = gst_omx_port_deallocate_buffers (self->dec_out_port);
 #endif
@@ -1151,31 +1151,41 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
       if (err != OMX_ErrorNone)
         goto no_egl;
 
-      if (1) {
+      {
+        GstStructure *s = gst_caps_get_structure (state->caps, 0);
+        if (gst_structure_has_field (s, "interlace-mode") &&
+            g_str_equal (gst_structure_get_string (s, "interlace-mode"),
+                "progressive"))
+          self->deinterlace = FALSE;
+        else
+          self->deinterlace = TRUE;
+      }
+
+      if (self->deinterlace) {
         OMX_PARAM_U32TYPE extra_buffers;
-        GST_ERROR_OBJECT (self, "SET PARAM extra buffers");
+
         memset (&extra_buffers, 0, sizeof (OMX_PARAM_U32TYPE));
         extra_buffers.nU32 = 3;
         extra_buffers.nSize = sizeof (extra_buffers);
         extra_buffers.nVersion.nVersion = OMX_VERSION;
-        if (gst_omx_component_set_parameter (self->image_fx,
+        if (gst_omx_component_set_parameter (self->dec,
                 OMX_IndexParamBrcmExtraBuffers,
                 &extra_buffers) != OMX_ErrorNone) {
           GST_ERROR_OBJECT (self, "Unable to configure decoder extra buffers");
           goto no_egl;
         }
-      }
 
-      if (1) {
         OMX_CONFIG_IMAGEFILTERPARAMSTYPE image_filter;
-        GST_ERROR_OBJECT (self, "SET PARAM DeInt");
+
+        GST_INFO_OBJECT (self, "Enable Broadcom OMX DeInterlacer");
+
         memset (&image_filter, 0, sizeof (OMX_CONFIG_IMAGEFILTERPARAMSTYPE));
         image_filter.nSize = sizeof (image_filter);
         image_filter.nVersion.nVersion = OMX_VERSION;
         image_filter.nNumParams = 1;
         image_filter.nPortIndex = 191;
         image_filter.nParams[0] = 3;
-        image_filter.eImageFilter = OMX_ImageFilterDeInterlaceAdvanced;
+        image_filter.eImageFilter = OMX_ImageFilterDeInterlaceFast;
         if (gst_omx_component_set_parameter (self->image_fx,
                 OMX_IndexConfigCommonImageFilterParameters,
                 &image_filter) != OMX_ErrorNone) {
@@ -1183,20 +1193,13 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
           goto no_egl;
         }
       }
+
       err = gst_omx_port_set_enabled (self->dec_in_port, TRUE);
       if (err != OMX_ErrorNone)
         goto no_egl;
 
       err = gst_omx_port_wait_enabled (self->dec_in_port, 1 * GST_SECOND);
       if (err != OMX_ErrorNone)
-        goto no_egl;
-
-      err = gst_omx_component_set_state (self->dec, OMX_StateExecuting);
-      if (err != OMX_ErrorNone)
-        goto no_egl;
-
-      if (gst_omx_component_get_state (self->dec,
-              GST_CLOCK_TIME_NONE) != OMX_StateExecuting)
         goto no_egl;
 
       err = gst_omx_component_set_state (self->image_fx, OMX_StateIdle);
@@ -1211,11 +1214,6 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
       if (err != OMX_ErrorNone)
         goto no_egl;
 
-      printf ("Image fx pending ports %d\n",
-          self->image_fx->pending_reconfigure_outports);
-      printf ("Dec pending ports %d\n",
-          self->dec->pending_reconfigure_outports);
-
       err = gst_omx_port_set_enabled (self->image_fx_in_port, TRUE);
       if (err != OMX_ErrorNone)
         goto no_egl;
@@ -1224,16 +1222,11 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
       if (err != OMX_ErrorNone)
         goto no_egl;
 
-      err = gst_omx_component_set_state (self->image_fx, OMX_StateExecuting);
+      err = gst_omx_port_set_enabled (self->dec_out_port, TRUE);
       if (err != OMX_ErrorNone)
         goto no_egl;
 
-      if (gst_omx_component_get_state (self->image_fx,
-              GST_CLOCK_TIME_NONE) != OMX_StateExecuting)
-        goto no_egl;
-
-      err =
-          gst_omx_port_set_flushing (self->dec_in_port, 5 * GST_SECOND, FALSE);
+      err = gst_omx_port_wait_enabled (self->dec_out_port, 1 * GST_SECOND);
       if (err != OMX_ErrorNone)
         goto no_egl;
 
@@ -1248,20 +1241,7 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
       if (err != OMX_ErrorNone)
         goto no_egl;
 
-      err =
-          gst_omx_port_set_flushing (self->image_fx_out_port, 5 * GST_SECOND,
-          FALSE);
-      if (err != OMX_ErrorNone)
-        goto no_egl;
-
-      err = gst_omx_component_set_state (self->egl_render, OMX_StateIdle);
-      if (err != OMX_ErrorNone)
-        goto no_egl;
-
-      if (gst_omx_component_get_state (self->egl_render,
-              GST_CLOCK_TIME_NONE) != OMX_StateIdle)
-        goto no_egl;
-
+#if 0
       if (0) {
         OMX_PARAM_PORTDEFINITIONTYPE filter_portdef;
         memset (&filter_portdef, 0, sizeof (OMX_PARAM_PORTDEFINITIONTYPE));
@@ -1348,31 +1328,7 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
         }
 
       }
-
-      err = gst_omx_setup_tunnel (self->image_fx_out_port, self->egl_in_port);
-      if (err != OMX_ErrorNone)
-        goto no_egl;
-
-      err = gst_omx_port_set_enabled (self->egl_in_port, TRUE);
-      if (err != OMX_ErrorNone)
-        goto no_egl;
-
-      err = gst_omx_port_wait_enabled (self->egl_in_port, 1 * GST_SECOND);
-      if (err != OMX_ErrorNone)
-        goto no_egl;
-
-      err = gst_omx_port_set_enabled (self->image_fx_out_port, TRUE);
-      if (err != OMX_ErrorNone)
-        goto no_egl;
-
-      err = gst_omx_port_wait_enabled (self->image_fx_out_port, 4 * GST_SECOND);
-      if (err != OMX_ErrorNone)
-        goto no_egl;
-
-
-      err = gst_omx_video_dec_allocate_output_buffers (self);
-      if (err != OMX_ErrorNone)
-        goto no_egl;
+#endif
 
       err =
           gst_omx_port_set_flushing (self->dec_out_port, 5 * GST_SECOND, FALSE);
@@ -1385,9 +1341,65 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
       if (err != OMX_ErrorNone)
         goto no_egl;
 
+      err = gst_omx_component_set_state (self->image_fx, OMX_StateExecuting);
+      if (err != OMX_ErrorNone)
+        goto no_egl;
+
+      if (gst_omx_component_get_state (self->image_fx,
+              GST_CLOCK_TIME_NONE) != OMX_StateExecuting)
+        goto no_egl;
+
+      err = gst_omx_component_set_state (self->dec, OMX_StateExecuting);
+      if (err != OMX_ErrorNone)
+        goto no_egl;
+
+      if (gst_omx_component_get_state (self->dec,
+              GST_CLOCK_TIME_NONE) != OMX_StateExecuting)
+        goto no_egl;
+
+
+      err = gst_omx_component_set_state (self->egl_render, OMX_StateIdle);
+      if (err != OMX_ErrorNone)
+        goto no_egl;
+
+      if (gst_omx_component_get_state (self->egl_render,
+              GST_CLOCK_TIME_NONE) != OMX_StateIdle)
+        goto no_egl;
+
+#if 0
+      print_port_def (self->dec_in_port->port_def);
+      print_port_def (self->dec_out_port->port_def);
+      print_port_def (self->image_fx_in_port->port_def);
+      print_port_def (self->image_fx_out_port->port_def);
+#endif
+      err = gst_omx_setup_tunnel (self->image_fx_out_port, self->egl_in_port);
+      if (err != OMX_ErrorNone)
+        goto no_egl;
+
       err =
           gst_omx_port_set_flushing (self->image_fx_out_port, 5 * GST_SECOND,
           FALSE);
+      if (err != OMX_ErrorNone)
+        goto no_egl;
+
+      err = gst_omx_port_set_enabled (self->image_fx_out_port, TRUE);
+      if (err != OMX_ErrorNone)
+        goto no_egl;
+
+      err = gst_omx_port_wait_enabled (self->image_fx_out_port, 4 * GST_SECOND);
+      if (err != OMX_ErrorNone)
+        goto no_egl;
+
+      err = gst_omx_port_set_enabled (self->egl_in_port, TRUE);
+      if (err != OMX_ErrorNone)
+        goto no_egl;
+
+      err = gst_omx_port_wait_enabled (self->egl_in_port, 1 * GST_SECOND);
+      if (err != OMX_ErrorNone)
+        goto no_egl;
+
+
+      err = gst_omx_video_dec_allocate_output_buffers (self);
       if (err != OMX_ErrorNone)
         goto no_egl;
 
@@ -1680,8 +1692,8 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
           OMX_VIDEO_CodingUnused);
 
       format =
-          gst_omx_video_get_format_from_omx (port_def.format.video.
-          eColorFormat);
+          gst_omx_video_get_format_from_omx (port_def.format.
+          video.eColorFormat);
 
       if (format == GST_VIDEO_FORMAT_UNKNOWN) {
         GST_ERROR_OBJECT (self, "Unsupported color format: %d",
@@ -1767,7 +1779,7 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
      * caps and filling it
      */
 
-    GST_ERROR_OBJECT (self, "No corresponding frame found");
+    //GST_ERROR_OBJECT (self, "No corresponding frame found");
 
     if (self->out_port_pool) {
       gint i, n;
@@ -1841,6 +1853,12 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
             outbuf);
 
       frame->output_buffer = outbuf;
+      /* FIXME: workaround for x2 amount of frames in case of deinterlace. */
+      if (self->deinterlace) {
+        frame->pts =
+            gst_util_uint64_scale (buf->omx_buf->nTimeStamp, GST_SECOND,
+            OMX_TICKS_PER_SECOND);
+      }
 
       flow_ret =
           gst_video_decoder_finish_frame (GST_VIDEO_DECODER (self), frame);
@@ -2049,6 +2067,9 @@ gst_omx_video_dec_stop (GstVideoDecoder * decoder)
 #if defined (USE_OMX_TARGET_RPI) && defined (HAVE_GST_GL)
   gst_omx_port_set_flushing (self->egl_in_port, 5 * GST_SECOND, TRUE);
   gst_omx_port_set_flushing (self->egl_out_port, 5 * GST_SECOND, TRUE);
+
+  gst_omx_port_set_flushing (self->image_fx_in_port, 5 * GST_SECOND, TRUE);
+  gst_omx_port_set_flushing (self->image_fx_out_port, 5 * GST_SECOND, TRUE);
 #endif
 
   gst_pad_stop_task (GST_VIDEO_DECODER_SRC_PAD (decoder));
@@ -2058,6 +2079,8 @@ gst_omx_video_dec_stop (GstVideoDecoder * decoder)
 #if defined (USE_OMX_TARGET_RPI) && defined (HAVE_GST_GL)
   if (gst_omx_component_get_state (self->egl_render, 0) > OMX_StateIdle)
     gst_omx_component_set_state (self->egl_render, OMX_StateIdle);
+  if (gst_omx_component_get_state (self->image_fx, 0) > OMX_StateIdle)
+    gst_omx_component_set_state (self->image_fx, OMX_StateIdle);
 #endif
 
   self->downstream_flow_ret = GST_FLOW_FLUSHING;
@@ -2071,6 +2094,7 @@ gst_omx_video_dec_stop (GstVideoDecoder * decoder)
   gst_omx_component_get_state (self->dec, 5 * GST_SECOND);
 #if defined (USE_OMX_TARGET_RPI) && defined (HAVE_GST_GL)
   gst_omx_component_get_state (self->egl_render, 1 * GST_SECOND);
+  gst_omx_component_get_state (self->image_fx, 1 * GST_SECOND);
 #endif
 
   gst_buffer_replace (&self->codec_data, NULL);
@@ -2284,18 +2308,20 @@ gst_omx_video_dec_set_format (GstVideoDecoder * decoder,
 
         egl_state = gst_omx_component_get_state (self->egl_render, 0);
         if (egl_state > OMX_StateLoaded || egl_state == OMX_StateInvalid) {
-
           if (egl_state > OMX_StateIdle) {
             gst_omx_component_set_state (self->egl_render, OMX_StateIdle);
+            gst_omx_component_set_state (self->image_fx, OMX_StateIdle);
             gst_omx_component_set_state (self->dec, OMX_StateIdle);
             egl_state = gst_omx_component_get_state (self->egl_render,
                 5 * GST_SECOND);
             gst_omx_component_get_state (self->dec, 1 * GST_SECOND);
           }
           gst_omx_component_set_state (self->egl_render, OMX_StateLoaded);
+          gst_omx_component_set_state (self->image_fx, OMX_StateLoaded);
           gst_omx_component_set_state (self->dec, OMX_StateLoaded);
 
-          gst_omx_close_tunnel (self->dec_out_port, self->egl_in_port);
+          gst_omx_close_tunnel (self->dec_out_port, self->image_fx_in_port);
+          gst_omx_close_tunnel (self->image_fx_out_port, self->egl_in_port);
 
           if (egl_state > OMX_StateLoaded) {
             gst_omx_component_get_state (self->egl_render, 5 * GST_SECOND);
@@ -2451,6 +2477,10 @@ gst_omx_video_dec_flush (GstVideoDecoder * decoder)
       gst_omx_component_set_state (self->egl_render, OMX_StatePause);
       gst_omx_component_get_state (self->egl_render, GST_CLOCK_TIME_NONE);
     }
+    if (gst_omx_component_get_state (self->image_fx, 0) == OMX_StateExecuting) {
+      gst_omx_component_set_state (self->image_fx, OMX_StatePause);
+      gst_omx_component_get_state (self->image_fx, GST_CLOCK_TIME_NONE);
+    }
   }
 #endif
 
@@ -2471,6 +2501,9 @@ gst_omx_video_dec_flush (GstVideoDecoder * decoder)
   if (self->eglimage) {
     gst_omx_port_set_flushing (self->egl_in_port, 5 * GST_SECOND, TRUE);
     gst_omx_port_set_flushing (self->egl_out_port, 5 * GST_SECOND, TRUE);
+
+    gst_omx_port_set_flushing (self->image_fx_in_port, 5 * GST_SECOND, TRUE);
+    gst_omx_port_set_flushing (self->image_fx_out_port, 5 * GST_SECOND, TRUE);
   }
 #endif
 
@@ -2481,6 +2514,8 @@ gst_omx_video_dec_flush (GstVideoDecoder * decoder)
   if (self->eglimage) {
     gst_omx_component_set_state (self->egl_render, OMX_StateExecuting);
     gst_omx_component_get_state (self->egl_render, GST_CLOCK_TIME_NONE);
+    gst_omx_component_set_state (self->image_fx, OMX_StateExecuting);
+    gst_omx_component_get_state (self->image_fx, GST_CLOCK_TIME_NONE);
   }
 #endif
 
@@ -2490,8 +2525,11 @@ gst_omx_video_dec_flush (GstVideoDecoder * decoder)
 
 #if defined (USE_OMX_TARGET_RPI) && defined (HAVE_GST_GL)
   if (self->eglimage) {
+    gst_omx_port_set_flushing (self->image_fx_in_port, 5 * GST_SECOND, FALSE);
+    gst_omx_port_set_flushing (self->image_fx_out_port, 5 * GST_SECOND, FALSE);
     gst_omx_port_set_flushing (self->egl_in_port, 5 * GST_SECOND, FALSE);
     gst_omx_port_set_flushing (self->egl_out_port, 5 * GST_SECOND, FALSE);
+
     err = gst_omx_port_populate (self->egl_out_port);
     gst_omx_port_mark_reconfigured (self->egl_out_port);
   } else {
