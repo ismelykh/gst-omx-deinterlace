@@ -965,83 +965,6 @@ gst_omx_video_dec_deallocate_output_buffers (GstOMXVideoDec * self)
   return err;
 }
 
-#if 0
-OMX_U32 nSize;                     /**< Size of the structure in bytes */
-OMX_VERSIONTYPE nVersion;          /**< OMX specification version information */
-OMX_U32 nPortIndex;                /**< Port number the structure applies to */
-OMX_DIRTYPE eDir;                  /**< Direction (input or output) of this port */
-OMX_U32 nBufferCountActual;        /**< The actual number of buffers allocated on this port */
-OMX_U32 nBufferCountMin;           /**< The minimum number of buffers this port requires */
-OMX_U32 nBufferSize;               /**< Size, in bytes, for buffers to be used for this channel */
-OMX_BOOL bEnabled;                 /**< Ports default to enabled and are enabled/disabled by
-                                        OMX_CommandPortEnable/OMX_CommandPortDisable.
-                                        When disabled a port is unpopulated. A disabled port
-                                        is not populated with buffers on a transition to IDLE. */
-OMX_BOOL bPopulated;               /**< Port is populated with all of its buffers as indicated by
-                                        nBufferCountActual. A disabled port is always unpopulated. 
-                                        An enabled port is populated on a transition to OMX_StateIdle
-                                        and unpopulated on a transition to loaded. */
-OMX_PORTDOMAINTYPE eDomain;        /**< Domain of the port. Determines the contents of metadata below. */
-union
-{
-  OMX_AUDIO_PORTDEFINITIONTYPE audio;
-  OMX_VIDEO_PORTDEFINITIONTYPE video;
-  OMX_IMAGE_PORTDEFINITIONTYPE image;
-  OMX_OTHER_PORTDEFINITIONTYPE other;
-} format;
-OMX_BOOL bBuffersContiguous;
-OMX_U32 nBufferAlignment;
-#endif
-
-static void
-print_port_def (OMX_PARAM_PORTDEFINITIONTYPE port_def)
-{
-  printf ("nSize %d\n", port_def.nSize);
-  printf ("nVer %d\n", port_def.nVersion);
-  printf ("nPortIndex %d\n", port_def.nPortIndex);
-  printf ("eDir %d\n", port_def.eDir);
-  printf ("nBufferCountActual %d\n", port_def.nBufferCountActual);
-  printf ("nBufferCountMin %d\n", port_def.nBufferCountMin);
-  printf ("nBufferSize %d\n", port_def.nBufferSize);
-  printf ("bEnabled %d\n", port_def.bEnabled);
-  printf ("bPopulated %d\n", port_def.bPopulated);
-
-  switch (port_def.eDomain) {
-    case OMX_PortDomainVideo:{
-      printf ("Video\n");
-      printf ("format.video.eColorFormat %d\n",
-          port_def.format.video.eColorFormat);
-      printf ("format.video.eCompressionFormat %d\n",
-          port_def.format.video.eCompressionFormat);
-      printf ("format.video.nFrameWidth %d\n",
-          port_def.format.video.nFrameWidth);
-      printf ("format.video.nFrameHeight %d\n",
-          port_def.format.video.nFrameHeight);
-      printf ("format.video.nStride %d\n", port_def.format.video.nStride);
-      printf ("format.video.nSliceHeight %d\n",
-          port_def.format.video.nSliceHeight);
-    }
-      break;
-    case OMX_PortDomainImage:{
-      printf ("Image\n");
-      printf ("format.image.eColorFormat %d\n",
-          port_def.format.image.eColorFormat);
-      printf ("format.image.eCompressionFormat %d\n",
-          port_def.format.image.eCompressionFormat);
-      printf ("format.image.nFrameWidth %d\n",
-          port_def.format.image.nFrameWidth);
-      printf ("format.image.nFrameHeight %d\n",
-          port_def.format.image.nFrameHeight);
-      printf ("format.image.nStride %d\n", port_def.format.image.nStride);
-      printf ("format.image.nSliceHeight %d\n",
-          port_def.format.image.nSliceHeight);
-    }
-      break;
-    default:
-      break;
-  }
-}
-
 static OMX_ERRORTYPE
 gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
 {
@@ -1241,95 +1164,6 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
       if (err != OMX_ErrorNone)
         goto no_egl;
 
-#if 0
-      if (0) {
-        OMX_PARAM_PORTDEFINITIONTYPE filter_portdef;
-        memset (&filter_portdef, 0, sizeof (OMX_PARAM_PORTDEFINITIONTYPE));
-        filter_portdef.nSize = sizeof (OMX_PARAM_PORTDEFINITIONTYPE);
-        filter_portdef.nVersion.nVersion = OMX_VERSION;
-        filter_portdef.nPortIndex = 131;
-
-        err =
-            gst_omx_component_get_parameter (self->dec,
-            OMX_IndexParamPortDefinition, &filter_portdef);
-        if (err != OMX_ErrorNone) {
-          GST_ERROR_OBJECT (self, "Get oaram error");
-          goto no_egl;
-        }
-
-        OMX_PARAM_PORTDEFINITIONTYPE portdef;
-        memset (&portdef, 0, sizeof (OMX_PARAM_PORTDEFINITIONTYPE));
-        portdef.nSize = sizeof (OMX_PARAM_PORTDEFINITIONTYPE);
-        portdef.nVersion.nVersion = OMX_VERSION;
-        portdef.nPortIndex = 191;
-
-        err =
-            gst_omx_component_get_parameter (self->image_fx,
-            OMX_IndexParamPortDefinition, &portdef);
-        if (err != OMX_ErrorNone) {
-          GST_ERROR_OBJECT (self, "BAD BAD\n");
-          goto no_egl;
-        }
-
-        portdef.nBufferSize = self->dec_out_port->port_def.nBufferSize;
-        err =
-            gst_omx_component_set_parameter (self->image_fx,
-            OMX_IndexParamPortDefinition, &portdef);
-        if (err != OMX_ErrorNone) {
-          GST_ERROR_OBJECT (self, "BAD BAD\n");
-          goto no_egl;
-        }
-
-        err = gst_omx_port_set_enabled (self->image_fx_out_port, TRUE);
-        if (err != OMX_ErrorNone)
-          goto no_egl;
-
-        err =
-            gst_omx_port_wait_enabled (self->image_fx_out_port, 4 * GST_SECOND);
-        if (err != OMX_ErrorNone)
-          goto no_egl;
-
-        portdef.nPortIndex = 220;
-        err =
-            gst_omx_component_get_parameter (self->egl_render,
-            OMX_IndexParamPortDefinition, &portdef);
-        if (err != OMX_ErrorNone) {
-          GST_ERROR_OBJECT (self, "BAD BAD\n");
-          goto no_egl;
-        }
-
-        portdef.eDomain = OMX_PortDomainImage;
-        portdef.format.image.nFrameHeight =
-            filter_portdef.format.image.nFrameHeight;
-        portdef.format.image.nFrameWidth =
-            filter_portdef.format.image.nFrameWidth;
-        portdef.format.image.eColorFormat = OMX_COLOR_FormatYUV420PackedPlanar;
-        portdef.format.image.nStride =
-            self->image_fx_in_port->port_def.format.image.nStride;
-        portdef.format.image.nSliceHeight =
-            self->image_fx_in_port->port_def.format.image.nSliceHeight;
-        portdef.nBufferSize = self->image_fx_in_port->port_def.nBufferSize;
-        //portdef.format.image.nSliceHeight = 0;
-        err =
-            gst_omx_component_set_parameter (self->egl_render,
-            OMX_IndexParamPortDefinition, &portdef);
-        if (err != OMX_ErrorNone) {
-          GST_ERROR_OBJECT (self, "BAD BAD\n");
-          goto no_egl;
-        }
-        portdef.nPortIndex = 220;
-
-        err =
-            gst_omx_component_get_parameter (self->egl_render,
-            OMX_IndexParamPortDefinition, &portdef);
-        if (err != OMX_ErrorNone) {
-          GST_ERROR_OBJECT (self, "BAD BAD\n");
-          goto no_egl;
-        }
-
-      }
-#endif
-
       err =
           gst_omx_port_set_flushing (self->dec_out_port, 5 * GST_SECOND, FALSE);
       if (err != OMX_ErrorNone)
@@ -1366,12 +1200,6 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
               GST_CLOCK_TIME_NONE) != OMX_StateIdle)
         goto no_egl;
 
-#if 0
-      print_port_def (self->dec_in_port->port_def);
-      print_port_def (self->dec_out_port->port_def);
-      print_port_def (self->image_fx_in_port->port_def);
-      print_port_def (self->image_fx_out_port->port_def);
-#endif
       err = gst_omx_setup_tunnel (self->image_fx_out_port, self->egl_in_port);
       if (err != OMX_ErrorNone)
         goto no_egl;
@@ -1403,7 +1231,6 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
       if (err != OMX_ErrorNone)
         goto no_egl;
 
-      //sleep(2);
       err =
           gst_omx_port_set_flushing (self->egl_in_port, 5 * GST_SECOND, FALSE);
       if (err != OMX_ErrorNone)
@@ -1427,14 +1254,6 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
       if (gst_omx_component_get_state (self->egl_render,
               GST_CLOCK_TIME_NONE) != OMX_StateExecuting)
         goto no_egl;
-
-      /*
-         err = gst_omx_port_populate (self->image_fx_out_port);
-         if (err != OMX_ErrorNone) {
-         GST_ERROR_OBJECT(self, "Unable to populate image_fx port");
-         goto no_egl;
-         } 
-       */
 
       err = gst_omx_port_populate (self->egl_out_port);
       if (err != OMX_ErrorNone)
