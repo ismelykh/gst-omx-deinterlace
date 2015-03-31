@@ -956,8 +956,8 @@ gst_omx_video_dec_deallocate_output_buffers (GstOMXVideoDec * self)
   }
 #if defined (USE_OMX_TARGET_RPI) && defined (HAVE_GST_GL)
   err =
-      gst_omx_port_deallocate_buffers (self->
-      eglimage ? self->egl_out_port : self->dec_out_port);
+      gst_omx_port_deallocate_buffers (self->eglimage ? self->
+      egl_out_port : self->dec_out_port);
 #else
   err = gst_omx_port_deallocate_buffers (self->dec_out_port);
 #endif
@@ -1279,10 +1279,12 @@ gst_omx_video_dec_reconfigure_output_port (GstOMXVideoDec * self)
       if (err != OMX_ErrorNone)
         goto no_egl;
 
+#if 0
       print_port_def (self->image_fx_in_port->port_def);
       print_port_def (self->image_fx_out_port->port_def);
       print_port_def (self->egl_in_port->port_def);
       print_port_def (self->egl_out_port->port_def);
+#endif
       goto done;
     }
 
@@ -1511,8 +1513,8 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
           OMX_VIDEO_CodingUnused);
 
       format =
-          gst_omx_video_get_format_from_omx (port_def.format.
-          video.eColorFormat);
+          gst_omx_video_get_format_from_omx (port_def.format.video.
+          eColorFormat);
 
       if (format == GST_VIDEO_FORMAT_UNKNOWN) {
         GST_ERROR_OBJECT (self, "Unsupported color format: %d",
